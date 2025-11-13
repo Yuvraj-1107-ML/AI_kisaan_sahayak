@@ -5,7 +5,7 @@ import aiohttp
 import tempfile
 from typing import Optional
 import assemblyai as aai
-from elevenlabs import generate, set_api_key, Voice, VoiceSettings
+from elevenlabs import ElevenLabs, Voice, VoiceSettings
 from gtts import gTTS
 import io
 from config import Config
@@ -15,8 +15,6 @@ import azure.cognitiveservices.speech as speechsdk
 logger = logging.getLogger(__name__)
 
 # Initialize API keys
-if Config.TTS_PROVIDER == "elevenlabs":
-    set_api_key(Config.ELEVENLABS_API_KEY)
 aai.settings.api_key = Config.ASSEMBLYAI_API_KEY
 
 # Initialize Azure Speech SDK if using Azure
@@ -30,6 +28,12 @@ class VoiceService:
     def __init__(self):
         self.transcriber = aai.Transcriber()
         self.tts_provider = Config.TTS_PROVIDER
+        
+        # Initialize ElevenLabs client if using ElevenLabs
+        if Config.TTS_PROVIDER == "elevenlabs":
+            self.elevenlabs_client = ElevenLabs(api_key=Config.ELEVENLABS_API_KEY)
+        else:
+            self.elevenlabs_client = None
         
         logger.info(f"🎤 Voice Service initialized with TTS provider: {self.tts_provider}")
         
@@ -270,21 +274,17 @@ class VoiceService:
             Base64 encoded audio data
         """
         try:
+            if not self.elevenlabs_client:
+                logger.error("ElevenLabs client not initialized")
+                return ""
+                
             voice_config = self.voice_configs.get(language, self.voice_configs['hindi'])
             
-            # Generate audio using ElevenLabs
-            audio = generate(
+            # Generate audio using ElevenLabs new API
+            audio = self.elevenlabs_client.text_to_speech.convert(
                 text=text,
-                voice=Voice(
-                    voice_id=voice_config['voice_id'],
-                    settings=VoiceSettings(
-                        stability=0.5,
-                        similarity_boost=0.75,
-                        style=0.0,
-                        use_speaker_boost=True
-                    )
-                ),
-                model=voice_config['model']
+                voice_id=voice_config['voice_id'],
+                model_id=voice_config['model']
             )
             
             # Convert to base64

@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from datetime import date
 
 # Voice Interaction Models
@@ -15,6 +15,8 @@ class VoiceResponse(BaseModel):
     session_id: str
     user_text: Optional[str] = ""  # Add transcribed user text
     requires_camera: Optional[bool] = False  # Trigger camera for disease detection
+    avatar_data: Optional[Dict[str, Any]] = None  # Avatar response data
+    additional_info: Optional[Dict[str, Any]] = None  # Additional info for display panel
 
 class LanguageSelectionRequest(BaseModel):
     session_id: str

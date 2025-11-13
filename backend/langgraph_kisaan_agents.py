@@ -1,7 +1,7 @@
 import os
 from typing import List, TypedDict, Dict, Any
 from dotenv import load_dotenv
-from langchain.schema import SystemMessage, HumanMessage
+from langchain_core.messages import SystemMessage, HumanMessage
 from langgraph.graph import StateGraph, END
 from langchain_google_genai import ChatGoogleGenerativeAI
 from db import get_db_connection
@@ -16,9 +16,6 @@ load_dotenv()
 
 # Import after to avoid circular dependency
 from agriculture_apis import agriculture_api_service
-
-logger = logging.getLogger(__name__)
-load_dotenv()
 
 # Helper function to get current season
 def get_current_season():
@@ -116,9 +113,10 @@ class KisaanAgentState(TypedDict):
 
 # Initialize Gemini LLM
 llm = ChatGoogleGenerativeAI(
-    model="gemini-2.0-flash-live",
-    temperature=0.3,
-    google_api_key=os.getenv("GEMINI_API_KEY")
+    model="gemini-2.0-flash-lite",
+    temperature=0.01,
+    google_api_key=os.getenv("GEMINI_API_KEY"),
+    model_kwargs={"seed": 42}
 )
 
 # Agent 1: Query Understanding Agent - IMPROVED
@@ -252,7 +250,8 @@ def crop_disease_agent(state: KisaanAgentState) -> KisaanAgentState:
     # Instead of text-based diagnosis, trigger camera
     camera_prompts = {
         "hindi": "क्या आप पत्ती की फोटो दिखाना चाहते हैं? यह ज्यादा सटीक निदान में मदद करेगा।",
-        "english": "Would you like to show the leaf photo? This will help in more accurate diagnosis."
+        "english": "Would you like to show the leaf photo? This will help in more accurate diagnosis.",
+        "marathi": "तुम्हाला पानाचा फोटो दाखवायचा आहे का? यामुळे अधिक अचूक निदान करण्यात मदत होईल."
     }
     
     return {
@@ -510,6 +509,7 @@ Focus on accuracy and completeness over brevity.
         logger.error(f"General advisory error: {str(e)}")
         fallback_msg = {
             "hindi": "मुझे खुशी होगी आपकी मदद करने में। कृपया अपना सवाल फिर से पूछें या अधिक विवरण दें।",
+            "marathi": "मी आपकी मदद करने में खुशी होगी। कृपया अपना सवाल फिर से पूछें या अधिक विवरण दें।",
             "english": "I'd be happy to help you. Please ask your question again or provide more details."
         }
         return {"recommendations": [fallback_msg.get(language, fallback_msg["hindi"])]}

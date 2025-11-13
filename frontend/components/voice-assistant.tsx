@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useRef, useEffect, useCallback, useMemo } from "react"
+import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Mic, MicOff, Loader2, Settings, Languages, History, Volume2 } from "lucide-react"
@@ -35,7 +36,11 @@ export default function VoiceAssistant() {
   const [isAutoRecording, setIsAutoRecording] = useState(false)
   const [showCamera, setShowCamera] = useState(false)
   const [isSpeaking, setIsSpeaking] = useState(false)
-  
+  const [isPaused, setIsPaused] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [retryCount, setRetryCount] = useState(0)
+  const currentAudioRef = useRef<HTMLAudioElement | null>(null)
+
   // Performance optimizations
   const pendingRequests = useRef<Map<string, Promise<any>>>(new Map())
   const lastRequestTime = useRef<number>(0)
@@ -121,15 +126,47 @@ export default function VoiceAssistant() {
       initAudioContext()
       document.removeEventListener('click', handleUserInteraction)
       document.removeEventListener('touchstart', handleUserInteraction)
+      document.removeEventListener('keydown', handleUserInteraction)
     }
 
     document.addEventListener('click', handleUserInteraction)
     document.addEventListener('touchstart', handleUserInteraction)
+    document.addEventListener('keydown', handleUserInteraction)
+
+    // Add keyboard shortcuts for better accessibility
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Space bar to start/stop recording (when active)
+      if (e.code === 'Space' && status === 'active' && !isSpeaking) {
+        e.preventDefault()
+        if (isRecording) {
+          stopRecording()
+        } else {
+          startRecording()
+        }
+      }
+      // Enter to start session (when idle)
+      if (e.code === 'Enter' && status === 'idle') {
+        e.preventDefault()
+        startSession()
+      }
+      // Escape to stop recording or close modals
+      if (e.code === 'Escape') {
+        if (isRecording) {
+          stopRecording()
+        } else if (showLanguageSelector) {
+          setShowLanguageSelector(false)
+        } else if (showStats) {
+          setShowStats(false)
+        }
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
 
     return () => {
       // Restore original console.warn
       console.warn = originalWarn
-      
+
       // Comprehensive cleanup
       if (silenceTimeoutRef.current) {
         clearTimeout(silenceTimeoutRef.current)
@@ -143,13 +180,15 @@ export default function VoiceAssistant() {
       if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
         audioContextRef.current.close()
       }
-      
+
       // Clear caches
       pendingRequests.current.clear()
-      
+
       // Remove event listeners
       document.removeEventListener('click', handleUserInteraction)
       document.removeEventListener('touchstart', handleUserInteraction)
+      document.removeEventListener('keydown', handleUserInteraction)
+      document.removeEventListener('keydown', handleKeyDown)
     }
   }, [])
 
@@ -232,6 +271,8 @@ export default function VoiceAssistant() {
       }
 
       setCurrentTranscript("")
+      setError(null) // Clear any previous errors
+      setRetryCount(0) // Reset retry count
 
       // Optimized audio constraints for browser compatibility
       const stream = await navigator.mediaDevices.getUserMedia({ 
@@ -323,6 +364,8 @@ export default function VoiceAssistant() {
     } catch (error) {
       console.error("[v0] Error starting recording:", error)
       setStatus("active")
+      setError("Microphone access denied or not available")
+      setTimeout(() => setError(null), 3000)
       throw error
     }
   }, [sessionId, status])
@@ -686,8 +729,23 @@ export default function VoiceAssistant() {
       pendingRequests.current.delete(requestKey)
       setStatus("active")
       setCurrentTranscript("")
+
+      // Handle errors with retry mechanism
+      if (retryCount < 2) {
+        setError("Connection issue. Retrying...")
+        setRetryCount(prev => prev + 1)
+        setTimeout(() => {
+          setError(null)
+          setRetryCount(0)
+          // Retry the request
+          sendAudioQuery(audioBlob)
+        }, 2000)
+      } else {
+        setError("Please check your connection and try again")
+        setTimeout(() => setError(null), 5000)
+      }
     }
-  }, [sessionId, selectedLanguage])
+  }, [sessionId, selectedLanguage, retryCount])
 
   const processLanguageSelection = async (audioBlob: Blob, currentSessionId?: string) => {
     // Use passed sessionId or fallback to state
@@ -857,19 +915,29 @@ export default function VoiceAssistant() {
       // Always create a fresh audio element - no caching
       const audio = new Audio(`data:audio/mp3;base64,${base64Audio}`)
       audio.preload = 'auto'
+      currentAudioRef.current = audio
       
       audio.onplay = () => {
         console.log("[v0] Audio started playing")
         setIsSpeaking(true)
+        setIsPaused(false)
+      }
+      audio.onpause = () => {
+        console.log("[v0] Audio paused")
+        if (!audio.ended) setIsPaused(true)
       }
       audio.onended = () => {
         console.log("[v0] Audio finished playing")
         setIsSpeaking(false)
+        setIsPaused(false)
+        currentAudioRef.current = null
         resolve()
       }
       audio.onerror = (e) => {
         console.error("[v0] Audio playback error:", e)
         setIsSpeaking(false)
+        setIsPaused(false)
+        currentAudioRef.current = null
         reject(e)
       }
       
@@ -877,10 +945,23 @@ export default function VoiceAssistant() {
       audio.play().catch(e => {
         console.error("[v0] Audio play error:", e)
         setIsSpeaking(false)
+        setIsPaused(false)
+        currentAudioRef.current = null
         reject(e)
       })
     })
   }, [])
+  
+  const toggleAudioPause = useCallback(() => {
+    const audio = currentAudioRef.current
+    if (!audio) return
+    
+    if (isPaused || audio.paused) {
+      audio.play()
+    } else {
+      audio.pause()
+    }
+  }, [isPaused])
 
   const handleLanguageSelection = async (languageName: string) => {
     if (!sessionId) return
@@ -975,7 +1056,7 @@ export default function VoiceAssistant() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 via-emerald-50/50 to-teal-50 flex items-center justify-center p-4 relative overflow-hidden">
+    <div className="min-h-screen bg-gradient-to-br from-green-50 via-emerald-50/50 to-teal-50 flex items-center justify-center p-2 sm:p-4 relative overflow-hidden">
       {showCamera && sessionId && (
         <CameraDiseaseDetector
           sessionId={sessionId}
@@ -989,50 +1070,72 @@ export default function VoiceAssistant() {
       )}
 
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-20 left-10 w-72 h-72 bg-green-400/20 rounded-full blur-3xl animate-float" />
+        <div className="absolute top-20 left-10 w-48 h-48 sm:w-72 sm:h-72 bg-green-400/20 rounded-full blur-3xl animate-float" />
         <div
-          className="absolute bottom-20 right-10 w-96 h-96 bg-emerald-400/20 rounded-full blur-3xl animate-float"
+          className="absolute bottom-20 right-10 w-64 h-64 sm:w-96 sm:h-96 bg-emerald-400/20 rounded-full blur-3xl animate-float"
           style={{ animationDelay: "1s" }}
         />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-teal-400/10 rounded-full blur-3xl animate-pulse" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 sm:w-[600px] sm:h-[600px] bg-teal-400/10 rounded-full blur-3xl animate-pulse" />
       </div>
 
-      <div className="w-full max-w-5xl relative z-10">
-        <Card className="bg-white/95 backdrop-blur-xl shadow-2xl overflow-hidden border-2 border-green-200/50">
-          <div className="relative bg-gradient-to-r from-green-600 via-emerald-600 to-teal-600 p-8 border-b border-white/20">
+      <div className="w-full max-w-6xl relative z-10">
+        <Card className="bg-white/95 backdrop-blur-xl shadow-2xl overflow-hidden border-2 border-green-200/50 rounded-2xl">
+          <div className="relative bg-gradient-to-r from-green-600 via-emerald-600 to-teal-600 p-4 sm:p-6 lg:p-8 border-b border-white/20">
             <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImdyaWQiIHdpZHRoPSI2MCIgaGVpZ2h0PSI2MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTSAxMCAwIEwgMCAwIDAgMTAiIGZpbGw9Im5vbmUiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS1vcGFjaXR5PSIwLjEiIHN0cm9rZS13aWR0aD0iMSIvPjwvcGF0dGVybj48L2RlZnM+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0idXJsKCNncmlkKSIvPjwvc3ZnPg==')] opacity-30" />
 
-            <div className="relative flex items-center justify-between">
-              <div className="flex-1">
-                <h1 className="text-4xl font-bold text-white text-balance mb-2 drop-shadow-lg">🌾 किसान सहायक</h1>
-                <p className="text-white/95 text-lg text-pretty drop-shadow">AI-Powered Farming Intelligence</p>
+            <div className="relative flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+              <div className="flex items-center gap-3 sm:gap-4 flex-1">
+                <div className="relative w-12 h-12 sm:w-16 sm:h-16 flex-shrink-0">
+                  <Image
+                    src="/kisaan-logo.png"
+                    alt="Kisan Suvidha Kendra Logo"
+                    fill
+                    className="object-contain drop-shadow-lg"
+                    priority
+                  />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-white text-balance mb-1 sm:mb-2 drop-shadow-lg leading-tight">
+                    🌾 किसान सहायक
+                  </h1>
+                  <p className="text-white/90 text-sm sm:text-base lg:text-lg text-pretty drop-shadow leading-relaxed">
+                    AI-Powered Farming Intelligence
+                  </p>
+                </div>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 self-start lg:self-center">
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="text-white hover:bg-white/20 h-10 w-10 rounded-full"
+                  className="text-white hover:bg-white/20 h-10 w-10 rounded-full transition-all duration-200 hover:scale-105"
                   onClick={() => setShowLanguageSelector(!showLanguageSelector)}
+                  title="Change Language"
                 >
-                  <Languages className="h-5 w-5" />
+                  <Languages className="h-4 w-4 sm:h-5 sm:w-5" />
                 </Button>
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="text-white hover:bg-white/20 h-10 w-10 rounded-full"
+                  className="text-white hover:bg-white/20 h-10 w-10 rounded-full transition-all duration-200 hover:scale-105"
                   onClick={() => setShowStats(!showStats)}
+                  title="View Session History"
                 >
-                  <History className="h-5 w-5" />
+                  <History className="h-4 w-4 sm:h-5 sm:w-5" />
                 </Button>
-                <Button variant="ghost" size="icon" className="text-white hover:bg-white/20 h-10 w-10 rounded-full">
-                  <Settings className="h-5 w-5" />
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="text-white hover:bg-white/20 h-10 w-10 rounded-full transition-all duration-200 hover:scale-105"
+                  title="Settings"
+                >
+                  <Settings className="h-4 w-4 sm:h-5 sm:w-5" />
                 </Button>
               </div>
             </div>
 
-            <div className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/20 backdrop-blur-sm border border-white/30">
-              <Languages className="h-4 w-4 text-white" />
+            <div className="mt-3 sm:mt-4 inline-flex items-center gap-2 px-3 sm:px-4 py-2 rounded-full bg-white/20 backdrop-blur-sm border border-white/30">
+              <Languages className="h-3 w-3 sm:h-4 sm:w-4 text-white" />
               <span className="text-sm font-medium text-white">{selectedLanguage}</span>
             </div>
           </div>
@@ -1047,9 +1150,9 @@ export default function VoiceAssistant() {
             />
           )}
 
-          <div className="p-8 space-y-8">
+          <div className="p-4 sm:p-6 lg:p-8 space-y-6 sm:space-y-8">
             {status === "idle" ? (
-              <div className="flex flex-col items-center justify-center py-16 space-y-8">
+              <div className="flex flex-col items-center justify-center py-8 sm:py-12 lg:py-16 space-y-6 sm:space-y-8">
                 <div className="relative">
                   <div className="absolute inset-0 bg-green-500/30 rounded-full blur-3xl animate-pulse-ring" />
                   <div className="absolute inset-0 bg-emerald-400/20 rounded-full blur-2xl animate-ripple" />
@@ -1057,39 +1160,58 @@ export default function VoiceAssistant() {
                   <Button
                     size="lg"
                     onClick={startSession}
-                    className="relative h-40 w-40 rounded-full text-xl font-bold shadow-2xl hover:shadow-green-500/50 transition-all duration-500 hover:scale-110 bg-gradient-to-br from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white border-4 border-white/30 group"
+                    className="relative h-32 w-32 sm:h-40 sm:w-40 rounded-full text-lg sm:text-xl font-bold shadow-2xl hover:shadow-green-500/50 transition-all duration-500 hover:scale-110 bg-gradient-to-br from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white border-4 border-white/30 group focus:outline-none focus:ring-4 focus:ring-green-500/50"
+                    aria-label="Start voice assistant session"
                   >
-                    <div className="flex flex-col items-center gap-3">
+                    <div className="flex flex-col items-center gap-2 sm:gap-3">
                       <div className="relative">
-                        <Mic className="h-16 w-16 transition-transform group-hover:scale-110" />
+                        <Mic className="h-12 w-12 sm:h-16 sm:w-16 transition-transform group-hover:scale-110" />
                         <div className="absolute inset-0 bg-white/20 rounded-full blur-xl group-hover:blur-2xl transition-all" />
                       </div>
-                      <span className="text-lg drop-shadow-lg">Start</span>
+                      <span className="text-base sm:text-lg drop-shadow-lg">Start</span>
                     </div>
                   </Button>
                 </div>
 
-                <div className="text-center space-y-4 max-w-2xl">
-                  <p className="text-lg text-gray-700 text-pretty font-medium">
-                    Tap the button to begin your conversation with the AI farming assistant
-                  </p>
+                <div className="text-center space-y-4 sm:space-y-6 max-w-3xl">
+                  <div className="space-y-2">
+                    <h2 className="text-xl sm:text-2xl font-bold text-gray-800">
+                      Welcome to Kisan Suvidha Kendra! 👋
+                    </h2>
+                    <p className="text-base sm:text-lg text-gray-700 text-pretty font-medium leading-relaxed">
+                      Your intelligent farming companion is ready to help with crop guidance, disease detection, and agricultural advice
+                    </p>
+                  </div>
 
-                  <div className="grid grid-cols-3 gap-4 mt-8">
-                    <div className="p-4 rounded-xl bg-gradient-to-br from-green-100 to-green-50 border-2 border-green-200/50 hover:border-green-300 transition-all hover:shadow-lg">
-                      <Volume2 className="h-8 w-8 text-green-600 mx-auto mb-2" />
-                      <p className="text-sm font-semibold text-green-900">Voice First</p>
-                      <p className="text-xs text-green-700 mt-1">Natural conversation</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+                    <div className="group p-4 sm:p-6 rounded-2xl bg-gradient-to-br from-green-50 to-green-100/50 border-2 border-green-200/50 hover:border-green-400 transition-all duration-300 hover:shadow-xl hover:-translate-y-1 cursor-default">
+                      <div className="flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 bg-green-500 rounded-xl group-hover:scale-110 transition-transform duration-300">
+                        <Volume2 className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
+                      </div>
+                      <h3 className="text-sm sm:text-base font-bold text-green-900 mb-1">Voice First</h3>
+                      <p className="text-xs sm:text-sm text-green-700 leading-relaxed">Natural conversation in your preferred language</p>
                     </div>
-                    <div className="p-4 rounded-xl bg-gradient-to-br from-emerald-100 to-emerald-50 border-2 border-emerald-200/50 hover:border-emerald-300 transition-all hover:shadow-lg">
-                      <Languages className="h-8 w-8 text-emerald-600 mx-auto mb-2" />
-                      <p className="text-sm font-semibold text-emerald-900">Multi-lingual</p>
-                      <p className="text-xs text-emerald-700 mt-1">10+ languages</p>
+                    <div className="group p-4 sm:p-6 rounded-2xl bg-gradient-to-br from-emerald-50 to-emerald-100/50 border-2 border-emerald-200/50 hover:border-emerald-400 transition-all duration-300 hover:shadow-xl hover:-translate-y-1 cursor-default">
+                      <div className="flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 bg-emerald-500 rounded-xl group-hover:scale-110 transition-transform duration-300">
+                        <Languages className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
+                      </div>
+                      <h3 className="text-sm sm:text-base font-bold text-emerald-900 mb-1">Multi-lingual</h3>
+                      <p className="text-xs sm:text-sm text-emerald-700 leading-relaxed">Supports 10+ Indian languages</p>
                     </div>
-                    <div className="p-4 rounded-xl bg-gradient-to-br from-teal-100 to-teal-50 border-2 border-teal-200/50 hover:border-teal-300 transition-all hover:shadow-lg">
-                      <History className="h-8 w-8 text-teal-600 mx-auto mb-2" />
-                      <p className="text-sm font-semibold text-teal-900">Smart Memory</p>
-                      <p className="text-xs text-teal-700 mt-1">Context aware</p>
+                    <div className="group p-4 sm:p-6 rounded-2xl bg-gradient-to-br from-teal-50 to-teal-100/50 border-2 border-teal-200/50 hover:border-teal-400 transition-all duration-300 hover:shadow-xl hover:-translate-y-1 cursor-default">
+                      <div className="flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 bg-teal-500 rounded-xl group-hover:scale-110 transition-transform duration-300">
+                        <History className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
+                      </div>
+                      <h3 className="text-sm sm:text-base font-bold text-teal-900 mb-1">Smart Memory</h3>
+                      <p className="text-xs sm:text-sm text-teal-700 leading-relaxed">Remembers your context and preferences</p>
                     </div>
+                  </div>
+
+                  <div className="mt-6 sm:mt-8 p-4 rounded-xl bg-blue-50 border border-blue-200/50">
+                    <p className="text-sm text-blue-800 font-medium flex items-center gap-2">
+                      <span className="text-blue-600">💡</span>
+                      <strong>Pro Tip:</strong> You can ask about crop diseases, weather advice, market prices, government schemes, and more!
+                    </p>
                   </div>
                 </div>
               </div>
@@ -1106,20 +1228,30 @@ export default function VoiceAssistant() {
                 />
 
                 {(status === "listening" || status === "processing") && (
-                  <div className="space-y-4">
+                  <div className="space-y-3 sm:space-y-4">
                     <AudioVisualizer isActive={status === "listening"} level={audioLevel} />
-                    <div className="flex items-center justify-center gap-2">
+                    <div className="flex items-center justify-center gap-3">
                       <div
-                        className={`h-2 w-2 rounded-full ${status === "listening" ? "bg-green-500 animate-pulse" : "bg-green-600 animate-pulse"}`}
+                        className={`h-3 w-3 rounded-full ${status === "listening" ? "bg-green-500 animate-pulse" : "bg-green-600 animate-pulse"}`}
                       />
-                      <span className="text-sm font-medium text-gray-700">
+                      <span className="text-sm sm:text-base font-medium text-gray-700">
                         {status === "listening" ? "Recording..." : "Processing..."}
                       </span>
                     </div>
                   </div>
                 )}
 
-                <div className="flex flex-col items-center gap-6 pt-6">
+                {/* Error display */}
+                {error && (
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-3 sm:p-4 mx-4">
+                    <div className="flex items-center gap-2">
+                      <span className="text-red-500">⚠️</span>
+                      <p className="text-sm text-red-700 font-medium">{error}</p>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex flex-col items-center gap-4 sm:gap-6 pt-4 sm:pt-6">
                   <div className="relative">
                     {(isRecording && status === "listening") && (
                       <>
@@ -1129,56 +1261,79 @@ export default function VoiceAssistant() {
                     )}
 
                     {(status === "processing") ? (
-                      <Button size="lg" disabled className="h-24 w-24 rounded-full shadow-xl relative bg-gradient-to-br from-green-600 to-emerald-600 text-white">
-                        <Loader2 className="h-10 w-10 animate-spin" />
+                      <Button size="lg" disabled className="h-20 w-20 sm:h-24 sm:w-24 rounded-full shadow-xl relative bg-gradient-to-br from-green-600 to-emerald-600 text-white">
+                        <Loader2 className="h-8 w-8 sm:h-10 sm:w-10 animate-spin" />
                       </Button>
                     ) : isSpeaking ? (
-                      <Button 
-                        size="lg" 
-                        disabled 
-                        className="h-24 w-24 rounded-full shadow-xl relative bg-gradient-to-br from-blue-600 to-blue-700 text-white opacity-75"
-                      >
-                        <Volume2 className="h-10 w-10 animate-pulse" />
-                      </Button>
+                      <div className="flex flex-col items-center gap-3">
+                        <Button
+                          size="lg"
+                          onClick={toggleAudioPause}
+                          className="h-20 w-20 sm:h-24 sm:w-24 rounded-full shadow-xl relative bg-gradient-to-br from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white transition-all hover:scale-105"
+                        >
+                          {isPaused ? (
+                            <svg className="h-8 w-8 sm:h-10 sm:w-10" fill="currentColor" viewBox="0 0 24 24">
+                              <path d="M8 5v14l11-7z"/>
+                            </svg>
+                          ) : (
+                            <svg className="h-8 w-8 sm:h-10 sm:w-10" fill="currentColor" viewBox="0 0 24 24">
+                              <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/>
+                            </svg>
+                          )}
+                        </Button>
+                        <p className="text-xs text-gray-600">
+                          {isPaused ? "Resume" : "Pause"}
+                        </p>
+                      </div>
                     ) : (
                       <Button
                         size="lg"
                         onClick={isRecording ? stopRecording : startRecording}
                         disabled={isSpeaking}
-                        className={`h-24 w-24 rounded-full transition-all duration-300 shadow-xl relative group border-4 border-white/50 ${
+                        className={`h-20 w-20 sm:h-24 sm:w-24 rounded-full transition-all duration-300 shadow-xl relative group border-4 border-white/50 touch-manipulation ${
                           isRecording && status === "listening"
-                            ? "bg-gradient-to-br from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white animate-pulse"
-                            : "bg-gradient-to-br from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white hover:scale-105 hover:shadow-2xl"
+                            ? "bg-gradient-to-br from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white animate-pulse active:scale-95"
+                            : "bg-gradient-to-br from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white hover:scale-105 hover:shadow-2xl active:scale-95"
                         } ${isSpeaking ? "opacity-75 cursor-not-allowed" : "opacity-100"}`}
+                        aria-label={isRecording ? "Stop recording" : "Start recording"}
                       >
                         {isRecording && status === "listening" ? (
-                          <MicOff className="h-10 w-10 transition-transform group-hover:scale-110" />
+                          <MicOff className="h-8 w-8 sm:h-10 sm:w-10 transition-transform group-hover:scale-110" />
                         ) : (
-                          <Mic className="h-10 w-10 transition-transform group-hover:scale-110" />
+                          <Mic className="h-8 w-8 sm:h-10 sm:w-10 transition-transform group-hover:scale-110" />
                         )}
                       </Button>
                     )}
                   </div>
 
-                  <div className="text-center space-y-2">
-                    <p className="text-base font-semibold text-gray-800">
-                      {status === "awaiting_language" && isAutoRecording && "🎤 Listening for your language... (Speak clearly)"}
-                      {status === "awaiting_language" && !isAutoRecording && "🌐 Please select your preferred language"}
-                      {status === "listening" && "🎤 Listening... (Auto-stop after 3s silence)"}
+                  <div className="text-center space-y-2 sm:space-y-3 max-w-md">
+                    <p className="text-sm sm:text-base font-semibold text-gray-800 leading-relaxed">
+                      {status === "awaiting_language" && isAutoRecording && "Listening for your language... (Speak clearly)"}
+                      {status === "awaiting_language" && !isAutoRecording && "Please select your preferred language"}
+                      {status === "listening" && "Listening... (Auto-stop after 3s silence)"}
                       {status === "processing" && "⚡ Processing your request..."}
-                      {status === "active" && !isSpeaking && "🎤 Ready to listen - Tap microphone to speak"}
-                      {status === "active" && isSpeaking && "🔊 Playing response..."}
+                      {status === "active" && !isSpeaking && "Ready to listen - Tap microphone to speak"}
+                      {status === "active" && isSpeaking && !isPaused && "🔊 Playing response..."}
+                      {status === "active" && isSpeaking && isPaused && "⏸️ Response paused"}
                     </p>
-                    <p className="text-sm text-gray-600">
+                    <p className="text-xs sm:text-sm text-gray-600 leading-relaxed">
                       {status === "active" && !isSpeaking && "Ask about farming, crops, weather, or plant diseases"}
                       {status === "listening" && "Speak clearly - will auto-stop after silence"}
                       {status === "awaiting_language" && isAutoRecording && "Not working? Tap 'Skip' to select manually"}
-                      {isSpeaking && "Please wait for response to finish"}
+                      {isSpeaking && !isPaused && "Click the pause button to pause the response"}
+                      {isSpeaking && isPaused && "Click play to continue listening"}
                     </p>
-                    
+
+                    {/* Keyboard shortcuts hint */}
+                    {!isSpeaking && (
+                      <p className="text-xs text-gray-500 mt-2">
+                        💡 {status === "active" ? "Press Space to record, Esc to stop" : "Press Enter to start"}
+                      </p>
+                    )}
+
                     {/* Manual language selection fallback */}
                     {status === "awaiting_language" && isAutoRecording && (
-                      <div className="mt-4">
+                      <div className="mt-3 sm:mt-4">
                         <Button
                           variant="outline"
                           size="sm"
@@ -1187,7 +1342,7 @@ export default function VoiceAssistant() {
                             setIsAutoRecording(false)
                             setShowLanguageSelector(true)
                           }}
-                          className="bg-white/80 hover:bg-white border-green-300 text-green-700 hover:text-green-800"
+                          className="bg-white/90 hover:bg-white border-green-300 text-green-700 hover:text-green-800 transition-all duration-200 hover:scale-105"
                         >
                           Skip Voice Detection
                         </Button>

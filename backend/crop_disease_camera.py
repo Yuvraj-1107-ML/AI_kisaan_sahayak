@@ -23,7 +23,7 @@ class CropDiseaseCamera:
     """Real-time camera-based crop disease detection"""
     
     def __init__(self):
-        self.model = genai.GenerativeModel('gemini-2.0-flash-exp')
+        self.model = genai.GenerativeModel('gemini-2.0-flash-lite')
         self.leaf_cascade = None
         self.setup_leaf_detection()
         
@@ -147,13 +147,20 @@ class CropDiseaseCamera:
             
             messages = {
                 "hindi": "पत्ती को कैमरे के सामने अच्छे से रखिए" if not is_leaf else "पत्ती मिल गई, विश्लेषण हो रहा है...",
-                "english": "Please hold the leaf properly in front of camera" if not is_leaf else "Leaf found, analyzing..."
+                "english": "Please hold the leaf properly in front of camera" if not is_leaf else "Leaf found, analyzing...",
+                "punjabi": "ਪੱਤਾ ਕੈਮਰੇ ਦੇ ਸਾਹਮਣੇ ਠੀਕ ਤਰ੍ਹਾਂ ਰੱਖੋ" if not is_leaf else "ਪੱਤਾ ਮਿਲ ਗਿਆ, ਵਿਸ਼ਲੇਸ਼ਣ ਹੋ ਰਿਹਾ ਹੈ...",
+                "marathi": "पान कॅमेऱ्यासमोर चांगल्या प्रकारे ठेवा" if not is_leaf else "पान सापडले, विश्लेषण होत आहे...",
+                "gujarati": "પાન કેમેરા સામે સારી રીતે મૂકો" if not is_leaf else "પાન મળ્યું, વિશ્લેષણ થઈ રહ્યું છે...",
+                "tamil": "இலை கேமரா முன் சரியாக வைக்கவும்" if not is_leaf else "இலை கிடைத்தது, பகுப்பாய்வு நடக்கிறது...",
+                "telugu": "ఆకు కెమెరా ముందు సరిగ్గా ఉంచండి" if not is_leaf else "ఆకు దొరికింది, విశ్లేషణ జరుగుతోంది...",
+                "kannada": "ಎಲೆ ಕ್ಯಾಮೆರಾ ಮುಂದೆ ಸರಿಯಾಗಿ ಇರಿಸಿ" if not is_leaf else "ಎಲೆ ಸಿಕ್ಕಿತು, ವಿಶ್ಲೇಷಣೆ ನಡೆಯುತ್ತಿದೆ...",
+                "bengali": "পাতা ক্যামেরার সামনে ভালো করে রাখুন" if not is_leaf else "পাতা পাওয়া গেছে, বিশ্লেষণ হচ্ছে..."
             }
             
             return {
                 "success": True,
                 "is_leaf_present": is_leaf,
-                "message": messages[language],
+                "message": messages.get(language, messages["hindi"]),
                 "raw_response": response_text
             }
             
@@ -201,6 +208,10 @@ class CropDiseaseCamera:
                 6. रोकथाम के उपाय
                 
                 सरल हिंदी में जवाब दें जो किसान आसानी से समझ सकें। अधिकतम 150 शब्दों में।
+
+                
+                Note: Do not use any astericks for emphasis or formating.
+                
                 """,
                 "english": """
                 You are an expert agricultural disease specialist. Analyze this leaf image and provide:
@@ -213,6 +224,106 @@ class CropDiseaseCamera:
                 6. Prevention measures
                 
                 Provide response in simple language that farmers can easily understand. Maximum 150 words.
+
+                Note: Do not use any astericks for emphasis or formating.
+                """,
+                "punjabi": """
+                ਤੁਸੀਂ ਇੱਕ ਮਾਹਿਰ ਖੇਤੀ ਰੋਗ ਵਿਸ਼ੇਸ਼ਗ ਹੋ। ਇਸ ਪੱਤੇ ਦੀ ਤਸਵੀਰ ਦਾ ਵਿਸ਼ਲੇਸ਼ਣ ਕਰੋ ਅਤੇ ਦੱਸੋ:
+                
+                1. ਫਸਲ ਦਾ ਨਾਮ (ਜੇ ਪਛਾਣ ਸਕੋ)
+                2. ਕੀ ਕੋਈ ਬੀਮਾਰੀ ਜਾਂ ਕੀੜੇ ਦਾ ਸੰਕਰਮਣ ਹੈ?
+                3. ਬੀਮਾਰੀ ਦਾ ਨਾਮ ਅਤੇ ਲੱਛਣ
+                4. ਗੰਭੀਰਤਾ ਦਾ ਪੱਧਰ (ਘੱਟ, ਮੱਧਮ, ਉੱਚ)
+                5. ਇਲਾਜ ਦੇ ਤਰੀਕੇ (ਜੈਵਿਕ ਅਤੇ ਰਸਾਇਣਿਕ ਦੋਵੇਂ)
+                6. ਰੋਕਥਾਮ ਦੇ ਉਪਾਅ
+                
+                ਸਰਲ ਪੰਜਾਬੀ ਵਿੱਚ ਜਵਾਬ ਦਿਓ ਜੋ ਕਿਸਾਨ ਆਸਾਨੀ ਨਾਲ ਸਮਝ ਸਕਣ। ਵੱਧ ਤੋਂ ਵੱਧ 150 ਸ਼ਬਦ।
+                
+                ਨੋਟ: ਜ਼ੋਰ ਦੇਣ ਜਾਂ ਫਾਰਮੈਟਿੰਗ ਲਈ ਕਿਸੇ ਵੀ ਤਾਰਾਂਕਨ ਚਿੰਨ੍ਹ ਦਾ ਉਪਯੋਗ ਨਾ ਕਰੋ।
+                """,
+                "marathi": """
+                तुम्ही एक तज्ञ शेती रोग तज्ञ आहात. या पानाच्या चित्राचे विश्लेषण करा आणि सांगा:
+                
+                1. पिकाचे नाव (ओळखल्यास)
+                2. काही रोग किंवा कीटकांचे संसर्ग आहे का?
+                3. रोगाचे नाव आणि लक्षणे
+                4. गंभीरता पातळी (कमी, मध्यम, उच्च)
+                5. उपचार पद्धती (जैविक आणि रासायनिक दोन्ही)
+                6. प्रतिबंध उपाय
+                
+                सोप्या मराठीत उत्तर द्या जे शेतकरी सहज समजू शकतात. जास्तीत जास्त 150 शब्द.
+                
+                Note: Do not use any astericks for emphasis or formating.
+                """,
+                "gujarati": """
+                તમે એક નિષ્ણાત કૃષિ રોગ નિષ્ણાત છો. આ પાનની છબીનું વિશ્લેષણ કરો અને કહો:
+                
+                1. પાકનું નામ (ઓળખી શકાય તો)
+                2. કોઈ રોગ અથવા કીટકોનું ચેપ છે?
+                3. રોગનું નામ અને લક્ષણો
+                4. ગંભીરતા સ્તર (નીચું, મધ્યમ, ઉચ્ચ)
+                5. સારવાર પદ્ધતિઓ (જૈવિક અને રાસાયણિક બંને)
+                6. અટકાવ ઉપાયો
+                
+                સરળ ગુજરાતીમાં જવાબ આપો જે ખેડૂતો સહેલાઈથી સમજી શકે. મહત્તમ 150 શબ્દો.
+                
+                નોંધ: ભાર આપવા અથવા ફોર્મેટિંગ માટે કોઈપણ તારાંકન ચિહ્નનો ઉપયોગ ન કરો.
+                """,
+                "tamil": """
+                நீங்கள் ஒரு நிபுணர் விவசாய நோய் நிபுணர். இந்த இலையின் படத்தை பகுப்பாய்வு செய்து சொல்லுங்கள்:
+                
+                1. பயிரின் பெயர் (அடையாளம் காண முடிந்தால்)
+                2. ஏதேனும் நோய் அல்லது பூச்சி தொற்று உள்ளதா?
+                3. நோயின் பெயர் மற்றும் அறிகுறிகள்
+                4. தீவிரம் நிலை (குறைந்த, நடுத்தர, உயர்)
+                5. சிகிச்சை முறைகள் (ஜீவ மற்றும் வேதியியல் இரண்டும்)
+                6. தடுப்பு நடவடிக்கைகள்
+                
+                விவசாயிகள் எளிதில் புரிந்துகொள்ளக்கூடிய எளிய தமிழில் பதிலளிக்கவும். அதிகபட்சம் 150 சொற்கள்.
+                
+                குறிப்பு: வலியுறுத்தல் அல்லது வடிவமைப்புக்கு எந்தவிதமான நட்சத்திர குறியீடுகளையும் பயன்படுத்த வேண்டாம்.
+                """,
+                "telugu": """
+                మీరు ఒక నిపుణుడు వ్యవసాయ వ్యాధి నిపుణుడు. ఈ ఆకు చిత్రాన్ని విశ్లేషించి చెప్పండి:
+                
+                1. పంట పేరు (గుర్తించగలిగితే)
+                2. ఏదైనా వ్యాధి లేదా కీటక సంక్రమణ ఉందా?
+                3. వ్యాధి పేరు మరియు లక్షణాలు
+                4. తీవ్రత స్థాయి (తక్కువ, మధ్యమ, ఎక్కువ)
+                5. చికిత్సా పద్ధతులు (జీవ మరియు రసాయన రెండూ)
+                6. నివారణ చర్యలు
+                
+                రైతులు సులభంగా అర్థం చేసుకోగలిగే సరళ తెలుగులో సమాధానం ఇవ్వండి. గరిష్ఠ 150 పదాలు.
+                
+                గమనిక: ఊదడం లేదా ఫార్మాటింగ్ కోసం ఏదైనా నక్షత్ర చిహ్నాలను ఉపయోగించవద్దు.
+                """,
+                "kannada": """
+                ನೀವು ಒಬ್ಬ ನಿಪುಣ ಕೃಷಿ ರೋಗ ನಿಪುಣ. ಈ ಎಲೆಯ ಚಿತ್ರವನ್ನು ವಿಶ್ಲೇಷಿಸಿ ಮತ್ತು ಹೇಳಿ:
+                
+                1. ಬೆಳೆಯ ಹೆಸರು (ಗುರುತಿಸಬಹುದಾದರೆ)
+                2. ಯಾವುದೇ ರೋಗ ಅಥವಾ ಕೀಟ ಸೋಂಕು ಇದೆಯೇ?
+                3. ರೋಗದ ಹೆಸರು ಮತ್ತು ಲಕ್ಷಣಗಳು
+                4. ತೀವ್ರತೆ ಮಟ್ಟ (ಕಡಿಮೆ, ಮಧ್ಯಮ, ಹೆಚ್ಚು)
+                5. ಚಿಕಿತ್ಸಾ ವಿಧಾನಗಳು (ಜೈವಿಕ ಮತ್ತು ರಾಸಾಯನಿಕ ಎರಡೂ)
+                6. ತಡೆಗಟ್ಟುವ ಕ್ರಮಗಳು
+                
+                ರೈತರು ಸುಲಭವಾಗಿ ಅರ್ಥಮಾಡಿಕೊಳ್ಳಬಹುದಾದ ಸರಳ ಕನ್ನಡದಲ್ಲಿ ಉತ್ತರಿಸಿ. ಗರಿಷ್ಠ 150 ಪದಗಳು.
+                
+                ಗಮನಿಸಿ: ಒತ್ತು ನೀಡುವುದು ಅಥವಾ ಫಾರ್ಮ್ಯಾಟಿಂಗ್ ಗಾಗಿ ಯಾವುದೇ ನಕ್ಷತ್ರ ಚಿಹ್ನೆಗಳನ್ನು ಬಳಸಬೇಡಿ.
+                """,
+                "bengali": """
+                আপনি একজন বিশেষজ্ঞ কৃষি রোগ বিশেষজ্ঞ। এই পাতার ছবি বিশ্লেষণ করুন এবং বলুন:
+                
+                1. ফসলের নাম (চিহ্নিত করতে পারলে)
+                2. কোন রোগ বা পোকামাকড়ের সংক্রমণ আছে?
+                3. রোগের নাম এবং লক্ষণ
+                4. তীব্রতা স্তর (নিম্ন, মাঝারি, উচ্চ)
+                5. চিকিৎসা পদ্ধতি (জৈব এবং রাসায়নিক উভয়)
+                6. প্রতিরোধ ব্যবস্থা
+                
+                সহজ বাংলায় উত্তর দিন যা কৃষকরা সহজেই বুঝতে পারে। সর্বোচ্চ ১৫০ শব্দ।
+                
+                নোট: জোর দেওয়া বা ফরম্যাটিং এর জন্য কোন তারকা চিহ্ন ব্যবহার করবেন না।
                 """
             }
             
@@ -230,10 +341,21 @@ class CropDiseaseCamera:
             
         except Exception as e:
             logger.error(f"Gemini diagnosis error: {str(e)}")
+            error_messages = {
+                "hindi": "निदान में त्रुटि हुई",
+                "english": "Diagnosis error occurred",
+                "punjabi": "ਨਿਦਾਨ ਵਿੱਚ ਗਲਤੀ ਹੋਈ",
+                "marathi": "निदानात त्रुटी झाली",
+                "gujarati": "નિદાનમાં ભૂલ થઈ",
+                "tamil": "நோயறிதலில் பிழை ஏற்பட்டது",
+                "telugu": "నిర్ధారణలో లోపం సంభవించింది",
+                "kannada": "ನಿದಾನದಲ್ಲಿ ದೋಷ ಸಂಭವಿಸಿದೆ",
+                "bengali": "নির্ণয়ে ত্রুটি হয়েছে"
+            }
             return {
                 "success": False,
                 "error": str(e),
-                "diagnosis": "निदान में त्रुटि हुई" if language == "hindi" else "Diagnosis error occurred"
+                "diagnosis": error_messages.get(language, error_messages["hindi"])
             }
         """
         Send leaf image to Gemini Vision for disease diagnosis
@@ -270,6 +392,8 @@ class CropDiseaseCamera:
                 6. रोकथाम के उपाय
                 
                 सरल हिंदी में जवाब दें जो किसान आसानी से समझ सकें।
+
+
                 """,
                 "english": """
                 You are an expert agricultural disease specialist. Analyze this leaf image and provide:
@@ -299,10 +423,21 @@ class CropDiseaseCamera:
             
         except Exception as e:
             logger.error(f"Gemini diagnosis error: {str(e)}")
+            error_messages = {
+                "hindi": "निदान में त्रुटि हुई",
+                "english": "Diagnosis error occurred",
+                "punjabi": "ਨਿਦਾਨ ਵਿੱਚ ਗਲਤੀ ਹੋਈ",
+                "marathi": "निदानात त्रुटी झाली",
+                "gujarati": "નિદાનમાં ભૂલ થઈ",
+                "tamil": "நோயறிதலில் பிழை ஏற்பட்டது",
+                "telugu": "నిర్ధారణలో లోపం సంభవించింది",
+                "kannada": "ನಿದಾನದಲ್ಲಿ ದೋಷ ಸಂಭವಿಸಿದೆ",
+                "bengali": "নির্ণয়ে ত্রুটি হয়েছে"
+            }
             return {
                 "success": False,
                 "error": str(e),
-                "diagnosis": "निदान में त्रुटि हुई" if language == "hindi" else "Diagnosis error occurred"
+                "diagnosis": error_messages.get(language, error_messages["hindi"])
             }
     
     def capture_and_diagnose(
@@ -325,10 +460,21 @@ class CropDiseaseCamera:
         cap = cv2.VideoCapture(camera_index)
         
         if not cap.isOpened():
+            camera_error_messages = {
+                "hindi": "कैमरा नहीं खुल सका",
+                "english": "Camera failed to open",
+                "punjabi": "ਕੈਮਰਾ ਨਹੀਂ ਖੁੱਲ੍ਹ ਸਕਿਆ",
+                "marathi": "कॅमेरा उघडू शकला नाही",
+                "gujarati": "કેમેરા ખુલી શક્યો નથી",
+                "tamil": "கேமரா திறக்க முடியவில்லை",
+                "telugu": "కెమెరా తెరవలేకపోయింది",
+                "kannada": "ಕ್ಯಾಮೆರಾ ತೆರೆಯಲು ಸಾಧ್ಯವಾಗಲಿಲ್ಲ",
+                "bengali": "ক্যামেরা খোলা যায়নি"
+            }
             return {
                 "success": False,
                 "error": "Camera could not be opened",
-                "message": "कैमरा नहीं खुल सका" if language == "hindi" else "Camera failed to open"
+                "message": camera_error_messages.get(language, camera_error_messages["hindi"])
             }
         
         # Set camera properties for faster processing
@@ -343,7 +489,14 @@ class CropDiseaseCamera:
         
         messages = {
             "hindi": "कृपया पत्ती को सही से कैमरे के सामने रखें",
-            "english": "Please hold the leaf properly in front of the camera"
+            "english": "Please hold the leaf properly in front of the camera",
+            "punjabi": "ਕਿਰਪਾ ਕਰਕੇ ਪੱਤਾ ਕੈਮਰੇ ਦੇ ਸਾਹਮਣੇ ਠੀਕ ਤਰ੍ਹਾਂ ਰੱਖੋ",
+            "marathi": "कृपया पान कॅमेऱ्यासमोर योग्य प्रकारे ठेवा",
+            "gujarati": "કૃપા કરીને પાન કેમેરા સામે યોગ્ય રીતે મૂકો",
+            "tamil": "தயவுசெய்து இலை கேமரா முன் சரியாக வைக்கவும்",
+            "telugu": "దయచేసి ఆకు కెమెరా ముందు సరిగ్గా ఉంచండి",
+            "kannada": "ದಯವಿಟ್ಟು ಎಲೆ ಕ್ಯಾಮೆರಾ ಮುಂದೆ ಸರಿಯಾಗಿ ಇರಿಸಿ",
+            "bengali": "দয়া করে পাতা ক্যামেরার সামনে সঠিকভাবে রাখুন"
         }
         
         logger.info(f"Camera opened. Waiting for leaf detection (timeout: {timeout_seconds}s)")
@@ -410,7 +563,7 @@ class CropDiseaseCamera:
         if best_frame is None or best_confidence < 0.3:
             return {
                 "success": False,
-                "message": messages[language],
+                "message": messages.get(language, messages["hindi"]),
                 "confidence": best_confidence
             }
         

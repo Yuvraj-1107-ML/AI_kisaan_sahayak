@@ -16,12 +16,13 @@ from voice_service import voice_service
 from realtime_voice_service import realtime_voice_service
 from langgraph_kisaan_agents import build_kisaan_graph
 from crop_disease_camera import CropDiseaseCamera
+from avatar_service import avatar_service
 from typing import Dict
 import re
 import json
 import base64
 
-app = FastAPI(title="Kisaan Voice Assistant API")
+app = FastAPI(title="Kisan Voice Assistant API")
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -45,7 +46,7 @@ app.add_middleware(
 
 @app.get("/")
 async def root():
-    return {"message": "नमस्ते! Welcome to Kisaan Voice Assistant API 🌾"}
+    return {"message": "नमस्ते! Welcome to Kisan Voice Assistant API 🌾"}
 
 @app.get("/products/{filename}")
 async def get_product_image(filename: str):
@@ -306,6 +307,16 @@ async def process_voice_query(request: VoiceQueryRequest):
     # Convert response to speech
     response_audio = await voice_service.text_to_speech(response_text, session.language)
     
+    # Generate avatar response with additional info
+    avatar_response = await avatar_service.generate_avatar_response(
+        text=response_text,
+        audio_base64=response_audio,
+        language=session.language
+    )
+    
+    # Extract additional info for display panel
+    additional_info = avatar_service.extract_additional_info(final_state)
+    
     # Update conversation history
     session.conversation_history.append({
         "user": transcribed_text,
@@ -315,30 +326,18 @@ async def process_voice_query(request: VoiceQueryRequest):
     })
     session.last_activity = datetime.now().isoformat()
     
-    return VoiceResponse(
-        text_response=response_text,
-        audio_base64=response_audio,
-        language=session.language,
-        session_id=session_id,
-        user_text=transcribed_text,
-        requires_camera=requires_camera
-    )
+    response_data = {
+        "text_response": response_text,
+        "audio_base64": avatar_response.get("audio_base64", response_audio),
+        "language": session.language,
+        "session_id": session_id,
+        "user_text": transcribed_text,
+        "requires_camera": requires_camera,
+        "avatar_data": avatar_response,
+        "additional_info": additional_info
+    }
     
-    # Update conversation history
-    session.conversation_history.append({
-        "user": transcribed_text,
-        "assistant": response_text,
-        "timestamp": datetime.now().isoformat()
-    })
-    session.last_activity = datetime.now().isoformat()
-    
-    return VoiceResponse(
-        text_response=response_text,
-        audio_base64=response_audio,
-        language=session.language,
-        session_id=session_id,
-        user_text=transcribed_text  # Add user's transcribed text
-    )
+    return VoiceResponse(**response_data)
 
 def extract_location_from_text(text: str) -> Dict:
     """
@@ -555,7 +554,7 @@ async def diagnose_crop_disease(request: dict):
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "service": "Kisaan Voice Assistant"}
+    return {"status": "healthy", "service": "Kisan Voice Assistant"}
 
 
 @app.websocket("/ws/voice")

@@ -25,6 +25,10 @@ python-dotenv
 requests
 tqdm
 numpy
+cmake
+opencv-python
+--find-links https://download.pytorch.org/whl/torch_stable.html
+torch
 transformers
 sentence-transformers
 assemblyai
