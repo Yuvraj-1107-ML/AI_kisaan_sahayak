@@ -5,7 +5,6 @@ import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Mic, MicOff, Loader2, Settings, Languages, History, Volume2 } from "lucide-react"
-import AudioVisualizer from "@/components/audio-visualizer"
 import MessageList from "@/components/message-list"
 import LanguageSelector from "@/components/language-selector"
 import SessionStats from "@/components/session-stats"
@@ -45,6 +44,16 @@ export default function VoiceAssistant() {
   const pendingRequests = useRef<Map<string, Promise<any>>>(new Map())
   const lastRequestTime = useRef<number>(0)
   const REQUEST_DEBOUNCE_TIME = 300 // Prevent duplicate requests within 300ms
+
+  // Prevent scrolling - Kiosk mode
+  useEffect(() => {
+    document.body.style.overflow = "hidden"
+    document.documentElement.style.overflow = "hidden"
+    return () => {
+      document.body.style.overflow = ""
+      document.documentElement.style.overflow = ""
+    }
+  }, [])
   
   // Browser capability detection with fallback options
   const getOptimalMediaRecorderOptions = useCallback((): MediaRecorderOptions => {
@@ -1078,17 +1087,17 @@ export default function VoiceAssistant() {
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 sm:w-[600px] sm:h-[600px] bg-teal-400/10 rounded-full blur-3xl animate-pulse" />
       </div>
 
-      <div className="w-full max-w-6xl relative z-10">
-        <Card className="bg-white/95 backdrop-blur-xl shadow-2xl overflow-hidden border-2 border-green-200/50 rounded-2xl">
+      <div className="w-full h-full max-w-7xl relative z-10 flex flex-col">
+        <Card className="bg-white/95 backdrop-blur-xl shadow-2xl overflow-hidden border-2 border-green-200/50 rounded-2xl flex flex-col h-full">
           <div className="relative bg-gradient-to-r from-green-600 via-emerald-600 to-teal-600 p-4 sm:p-6 lg:p-8 border-b border-white/20">
             <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImdyaWQiIHdpZHRoPSI2MCIgaGVpZ2h0PSI2MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTSAxMCAwIEwgMCAwIDAgMTAiIGZpbGw9Im5vbmUiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS1vcGFjaXR5PSIwLjEiIHN0cm9rZS13aWR0aD0iMSIvPjwvcGF0dGVybj48L2RlZnM+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0idXJsKCNncmlkKSIvPjwvc3ZnPg==')] opacity-30" />
 
             <div className="relative flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
               <div className="flex items-center gap-3 sm:gap-4 flex-1">
-                <div className="relative w-12 h-12 sm:w-16 sm:h-16 flex-shrink-0">
+                <div className="relative w-24 h-12 sm:w-32 sm:h-16 flex-shrink-0">
                   <Image
-                    src="/kisaan-logo.png"
-                    alt="Kisan Suvidha Kendra Logo"
+                    src="/logo.jpg"
+                    alt="AI Lifebot - Kisan Suvidha Kendra"
                     fill
                     className="object-contain drop-shadow-lg"
                     priority
@@ -1150,7 +1159,7 @@ export default function VoiceAssistant() {
             />
           )}
 
-          <div className="p-4 sm:p-6 lg:p-8 space-y-6 sm:space-y-8">
+          <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 space-y-4 sm:space-y-6">
             {status === "idle" ? (
               <div className="flex flex-col items-center justify-center py-8 sm:py-12 lg:py-16 space-y-6 sm:space-y-8">
                 <div className="relative">
@@ -1216,42 +1225,35 @@ export default function VoiceAssistant() {
                 </div>
               </div>
             ) : (
-              <>
-                {showStats && <SessionStats messages={messages} sessionId={sessionId} />}
-
-                <MessageList
-                  messages={messages}
-                  isThinking={status === "processing"}
-                  isListening={status === "listening"}
-                  isSpeaking={isSpeaking}
-                  currentTranscript=""
-                />
-
-                {(status === "listening" || status === "processing") && (
-                  <div className="space-y-3 sm:space-y-4">
-                    <AudioVisualizer isActive={status === "listening"} level={audioLevel} />
-                    <div className="flex items-center justify-center gap-3">
-                      <div
-                        className={`h-3 w-3 rounded-full ${status === "listening" ? "bg-green-500 animate-pulse" : "bg-green-600 animate-pulse"}`}
-                      />
-                      <span className="text-sm sm:text-base font-medium text-gray-700">
-                        {status === "listening" ? "Recording..." : "Processing..."}
-                      </span>
-                    </div>
+              <div className="flex-1 flex flex-col min-h-0">
+                {showStats && (
+                  <div className="flex-shrink-0 mb-4">
+                    <SessionStats messages={messages} sessionId={sessionId} />
                   </div>
                 )}
+
+                <div className="flex-1 min-h-0 overflow-y-auto">
+                  <MessageList
+                    messages={messages}
+                    isThinking={status === "processing"}
+                    isListening={status === "listening"}
+                    isSpeaking={isSpeaking}
+                    currentTranscript=""
+                  />
+                </div>
+
 
                 {/* Error display */}
                 {error && (
-                  <div className="bg-red-50 border border-red-200 rounded-lg p-3 sm:p-4 mx-4">
+                  <div className="flex-shrink-0 bg-red-50 border border-red-200 rounded-lg p-2 sm:p-3 mb-3">
                     <div className="flex items-center gap-2">
                       <span className="text-red-500">⚠️</span>
-                      <p className="text-sm text-red-700 font-medium">{error}</p>
+                      <p className="text-xs sm:text-sm text-red-700 font-medium">{error}</p>
                     </div>
                   </div>
                 )}
 
-                <div className="flex flex-col items-center gap-4 sm:gap-6 pt-4 sm:pt-6">
+                <div className="flex flex-col items-center gap-3 sm:gap-4 pt-2 sm:pt-4 pb-4">
                   <div className="relative">
                     {(isRecording && status === "listening") && (
                       <>
@@ -1306,34 +1308,31 @@ export default function VoiceAssistant() {
                     )}
                   </div>
 
-                  <div className="text-center space-y-2 sm:space-y-3 max-w-md">
-                    <p className="text-sm sm:text-base font-semibold text-gray-800 leading-relaxed">
-                      {status === "awaiting_language" && isAutoRecording && "Listening for your language... (Speak clearly)"}
-                      {status === "awaiting_language" && !isAutoRecording && "Please select your preferred language"}
-                      {status === "listening" && "Listening... (Auto-stop after 3s silence)"}
-                      {status === "processing" && "⚡ Processing your request..."}
-                      {status === "active" && !isSpeaking && "Ready to listen - Tap microphone to speak"}
-                      {status === "active" && isSpeaking && !isPaused && "🔊 Playing response..."}
-                      {status === "active" && isSpeaking && isPaused && "⏸️ Response paused"}
+                  <div className="text-center space-y-1 max-w-md">
+                    <p className="text-xs sm:text-sm font-semibold text-gray-800 leading-tight">
+                      {status === "awaiting_language" && isAutoRecording && "Listening for language..."}
+                      {status === "awaiting_language" && !isAutoRecording && "Please select your language"}
+                      {status === "processing" && "Processing..."}
+                      {status === "active" && !isSpeaking && "Ready - Tap microphone"}
+                      {status === "active" && isSpeaking && !isPaused && "Speaking..."}
+                      {status === "active" && isSpeaking && isPaused && "Paused"}
                     </p>
-                    <p className="text-xs sm:text-sm text-gray-600 leading-relaxed">
-                      {status === "active" && !isSpeaking && "Ask about farming, crops, weather, or plant diseases"}
-                      {status === "listening" && "Speak clearly - will auto-stop after silence"}
-                      {status === "awaiting_language" && isAutoRecording && "Not working? Tap 'Skip' to select manually"}
-                      {isSpeaking && !isPaused && "Click the pause button to pause the response"}
-                      {isSpeaking && isPaused && "Click play to continue listening"}
-                    </p>
+                    {status === "active" && !isSpeaking && (
+                      <p className="text-xs text-gray-600 leading-tight">
+                        Ask about farming, crops, weather, or plant diseases
+                      </p>
+                    )}
 
                     {/* Keyboard shortcuts hint */}
                     {!isSpeaking && (
-                      <p className="text-xs text-gray-500 mt-2">
+                      <p className="text-xs text-gray-500 mt-1">
                         💡 {status === "active" ? "Press Space to record, Esc to stop" : "Press Enter to start"}
                       </p>
                     )}
 
                     {/* Manual language selection fallback */}
                     {status === "awaiting_language" && isAutoRecording && (
-                      <div className="mt-3 sm:mt-4">
+                      <div className="mt-2">
                         <Button
                           variant="outline"
                           size="sm"
@@ -1342,7 +1341,7 @@ export default function VoiceAssistant() {
                             setIsAutoRecording(false)
                             setShowLanguageSelector(true)
                           }}
-                          className="bg-white/90 hover:bg-white border-green-300 text-green-700 hover:text-green-800 transition-all duration-200 hover:scale-105"
+                          className="bg-white/90 hover:bg-white border-green-300 text-green-700 hover:text-green-800 transition-all duration-200 hover:scale-105 text-xs"
                         >
                           Skip Voice Detection
                         </Button>
@@ -1350,7 +1349,7 @@ export default function VoiceAssistant() {
                     )}
                   </div>
                 </div>
-              </>
+              </div>
             )}
           </div>
         </Card>

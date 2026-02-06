@@ -92,6 +92,25 @@ html {
   background: linear-gradient(to bottom, #1e3a8a, #1e293b);
 }
 
+/* Custom Scrollbar for Info Card */
+.info-card-scrollbar::-webkit-scrollbar {
+  width: 8px;
+}
+
+.info-card-scrollbar::-webkit-scrollbar-track {
+  background: #d1fae5;
+  border-radius: 4px;
+}
+
+.info-card-scrollbar::-webkit-scrollbar-thumb {
+  background: #6ee7b7;
+  border-radius: 4px;
+}
+
+.info-card-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #34d399;
+}
+
 /* Selection Color */
 ::selection {
   background-color: rgba(30, 64, 175, 0.3);

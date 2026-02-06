@@ -113,7 +113,7 @@ class KisaanAgentState(TypedDict):
 
 # Initialize Gemini LLM
 llm = ChatGoogleGenerativeAI(
-    model="gemini-2.0-flash-lite",
+    model="gemini-2.5-flash-lite",
     temperature=0.01,
     google_api_key=os.getenv("GEMINI_API_KEY"),
     model_kwargs={"seed": 42}
